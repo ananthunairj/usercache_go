@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/theStackguy/usercache_go/src"
+	"github.com/ananthunairj/usercache_go/src"
 )
 
 type Person struct {
