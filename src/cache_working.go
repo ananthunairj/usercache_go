@@ -7,7 +7,7 @@ import (
 
 type UserManager struct {
 	Users map[string]*User
-	Mu    sync.RWMutex
+	Mu    *sync.RWMutex
 }
 
 type User struct {
@@ -88,20 +88,20 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 
 	var userSnapShot userSnapShot
 	var wg *sync.WaitGroup
-	var osmemorychannel chan error
-	var memorychannel chan uint64
+	var osmemorychannel = make( chan error, 1)
 
-	wg.Add(2)
+
+	wg.Add(1)
 
 	go operatingSystemAvailableMemory(osmemorychannel, wg)
-	go mbSizeToUINT(memorylimitInMB, memorychannel, wg)
-
+	
+    mbtoUint := mbSizeToUINT(memorylimitInMB)
 	tokens, err := newTokenStrings(2)
 	if err != nil {
 		return nil, errGuid
 	}
 
-	var sessionuser *session
+	var sessionuser  = &session{}
 	var userId string = tokens[1]
 
 	userSnapShot.id = userId
@@ -130,12 +130,11 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 	if osmemerror := <-osmemorychannel; osmemerror != nil {
 		return nil, osmemerror
 	}
-	if !compareConfigOsMem(remainingOsSpace, <-memorychannel) {
+	if !compareConfigOsMem(remainingOsSpace, mbtoUint) {
 		return nil, errMemExceeded
 	}
 
-
-    var sessionConfigChannel chan error
+	var sessionConfigChannel= make (chan error, 1)
 	var userdto = &userDTO{
 		user:              userSnapShot,
 		isNew:             true,
@@ -143,11 +142,10 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 	}
 
 	wg.Add(1)
-    go sessionPoolConfig(userdto, sessionConfigChannel, wg)
-
+	go sessionPoolConfig(userdto, sessionConfigChannel, wg)
 
 	usermemory := &memorylimit{
-		configured:     <-memorychannel,
+		configured:     mbtoUint,
 		remainingSpace: remainingOsSpace,
 	}
 
@@ -163,7 +161,7 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 	wg.Wait()
 
 	if sessionerr := <-sessionConfigChannel; sessionerr != nil {
-		return  nil,sessionerr
+		return nil, sessionerr
 	}
 
 	um.Mu.Lock()
@@ -174,11 +172,9 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 
 func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime time.Duration, refreshTokenExpiryTime time.Duration) (*session, error) {
 
-	um.Mu.RLock()
-	user, exists := um.Users[userId]
-	um.Mu.RUnlock()
-	if !exists {
-		return nil, errUser
+	user,err := um.isUserAlive(userId)
+	if err != nil {
+		return  nil,err
 	}
 
 	userCopy := user.newUserSnapshot()
@@ -211,8 +207,8 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 	newsession.cache = newCache[string, any]()
 
 	wg.Wait()
-    if sessionerr := <-sessionConfigChannel; sessionerr != nil {
-		return  nil,sessionerr
+	if sessionerr := <-sessionConfigChannel; sessionerr != nil {
+		return nil, sessionerr
 	}
 	if userCopy.remainingSpace > <-sizeCalculatorChannel {
 		user.Mu.Lock()
@@ -228,7 +224,6 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 func (u *User) AddSessionCache() (*session, error) {
 
 	usercopy := u.newUserSnapshot()
-	
 
 }
 
@@ -289,3 +284,19 @@ func (user *User) newUserSnapshot() userSnapShot {
 // 	}
 // 	return false
 // }
+
+func (um *UserManager) isUserAlive(userid string) (*User,error) {
+	um.Mu.RLock()
+	 
+	user, exists := um.Users[userid]
+	um.Mu.RUnlock()
+	if !exists {
+		return nil,errUser
+	}
+	user.Mu.RLock()
+	defer user.Mu.RUnlock()
+	if !user.isActive {
+		return nil,errUserInactive
+	}
+	return user,nil
+}

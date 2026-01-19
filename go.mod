@@ -1,4 +1,4 @@
-module github.com/theStackguy/usercache_go
+module github.com/ananthunairj/usercache_go
 
 go 1.24.5
 

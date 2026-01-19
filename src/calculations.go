@@ -38,12 +38,9 @@ func calculateInputBytes(value any, c chan<- uint64, wg *sync.WaitGroup) {
 	c <- uint64(bytevalue)
 }
 
-func mbSizeToUINT(value float64, c chan<- uint64, wg *sync.WaitGroup) {
-	if wg != nil {
-		defer wg.Done()
-	}
-	c <- uint64(value * mbtouintsize)
-	close(c)
+func mbSizeToUINT(value float64) uint64 {
+	 return uint64(value * mbtouintsize)
+	
 }
 
 func compareConfigOsMem(osmem uint64, configmem uint64) bool {

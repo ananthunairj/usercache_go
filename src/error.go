@@ -4,7 +4,8 @@ import "errors"
 
 var (
 	errGuid                   = errors.New("issue occurred during guid creation")
-	errUser                   = errors.New("user not found or user is inactive")
+	errUser                   = errors.New("user not found")
+	errUserInactive           = errors.New(" user is inactive")
 	errUserDto                = errors.New("issue in the userDto object passed")
 	errUserMem                = errors.New("memory allocated for user exceeded")
 	errSessionTokenGen        = errors.New("error occured while creating session token")
@@ -33,5 +34,5 @@ var (
 	errKernelfail             = errors.New("kernel failed during the process")
 	errMemExceeded            = errors.New("requested memory not available  in the disk")
 
-	errSessionLimit           = errors.New("allowed session limit for the user exceeded")
+	errSessionLimit = errors.New("allowed session limit for the user exceeded")
 )
