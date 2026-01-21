@@ -33,6 +33,6 @@ var (
 	errNewLibray              = errors.New("issue occured while accessing the dynamic library ")
 	errKernelfail             = errors.New("kernel failed during the process")
 	errMemExceeded            = errors.New("requested memory not available  in the disk")
-
-	errSessionLimit = errors.New("allowed session limit for the user exceeded")
+	errUserInRegistryNotFound = errors.New("user happened to be missing in the registry")
+	errSessionLimit           = errors.New("allowed session limit for the user exceeded")
 )

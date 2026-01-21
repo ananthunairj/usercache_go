@@ -13,12 +13,13 @@ type memorylimit struct {
 }
 
 type activeSessionsRegistry struct {
-	mu          sync.RWMutex
-	maxSessions uint8
-	users       map[string]*activeUserSession
+	mu              sync.RWMutex
+	currentSessions uint8
+	sessions        map[string]*activeUserSession //key here is the user name
 }
 
 type activeUserSession struct {
+	mu         sync.RWMutex
 	SessionIDs []string
 }
 
@@ -39,8 +40,8 @@ func calculateInputBytes(value any, c chan<- uint64, wg *sync.WaitGroup) {
 }
 
 func mbSizeToUINT(value float64) uint64 {
-	 return uint64(value * mbtouintsize)
-	
+	return uint64(value * mbtouintsize)
+
 }
 
 func compareConfigOsMem(osmem uint64, configmem uint64) bool {
@@ -51,59 +52,80 @@ func compareConfigOsMem(osmem uint64, configmem uint64) bool {
 	return false
 }
 
-func sessionPoolConfig(userdto *userDTO, c chan<- error, wg *sync.WaitGroup) {
+func sessionPoolConfig(userdto *userDTO, c chan<- sessionPoolConfigDTO, wg *sync.WaitGroup) {
 	if wg != nil {
 		defer wg.Done()
 	}
 	defer close(c)
 
 	if userdto.user.isActive == true {
-		var pool *activeSessionsRegistry
-		pool.mu.RLock()
-		userinpool, userinpoolexist := pool.users[userdto.user.id]
-		pool.mu.RUnlock()
+
+		//experimental may be moved to inside the loop  based on behaviour if needed
+		userdto.pool.mu.RLock()
+		userinpool, userinpoolexist := userdto.pool.sessions[userdto.user.id]
+		userdto.pool.mu.RUnlock()
 
 		if !userdto.isNew {
 			if userinpoolexist {
 				if len(userinpool.SessionIDs) < Allowed_Sessions {
-					pool.mu.Lock()
+					userinpool.mu.Lock()
 					userinpool.SessionIDs = append(userinpool.SessionIDs, userdto.sessionTokenToAdd)
-					pool.mu.Unlock()
-					c <- nil
+					userinpool.mu.Unlock()
+					var activeSessionRegistryObj = &activeSessionsRegistry{}
+					activeSessionRegistryObj.sessionIncrementer()
+					activeSessionRegistryObj.sessions[userdto.user.id] = userinpool
+
+					c <- sessionPoolConfigDTO{
+						pool: activeSessionRegistryObj,
+					}
 					return
 				}
-				c <- errSessionLimit
+				c <- sessionPoolConfigDTO{
+					pool:  nil,
+					error: errSessionLimit,
+				}
 				return
 			}
-			registrydto := registrySessionDTO{
-				userid:            userdto.user.id,
-				sessionTokenToAdd: userdto.sessionTokenToAdd,
+			c <- sessionPoolConfigDTO{
+				pool:  nil,
+				error: errUserInRegistryNotFound,
 			}
-			newRegistryAssigner(registrydto, pool)
-			c <- nil
 			return
 		} else if userdto.isNew && !userinpoolexist {
-			registrydto := registrySessionDTO{
-				userid:            userdto.user.id,
-				sessionTokenToAdd: userdto.sessionTokenToAdd,
+			var activeSessionRegistryObj = &activeSessionsRegistry{}
+			var activeSessionObj = &activeUserSession{}
+			activeSessionObj.SessionIDs = append(activeSessionObj.SessionIDs, userdto.sessionTokenToAdd)
+			activeSessionRegistryObj.sessionIncrementer()
+			activeSessionRegistryObj.sessions[userdto.user.id] = activeSessionObj
+
+			c <- sessionPoolConfigDTO{
+				pool: activeSessionRegistryObj,
 			}
-			newRegistryAssigner(registrydto, pool)
-			c <- nil
 			return
 		}
-		c <- errUserDto
+		c <- sessionPoolConfigDTO{
+			pool:  nil,
+			error: errUserDto,
+		}
 		return
 	}
-	c <- errUser
+	c <- sessionPoolConfigDTO{
+		pool:  nil,
+		error: errUser,
+	}
 	return
 
 }
 
-func newRegistryAssigner(userdto registrySessionDTO, pool *activeSessionsRegistry) {
-	newActiveUserSession := &activeUserSession{
-		SessionIDs: []string{userdto.sessionTokenToAdd},
+func newSessionRegistry() *activeSessionsRegistry {
+	return &activeSessionsRegistry{
+		sessions: make(map[string]*activeUserSession),
 	}
-	pool.mu.Lock()
-	pool.users[userdto.userid] = newActiveUserSession
-	pool.mu.Unlock()
+}
+
+func (a *activeSessionsRegistry) sessionIncrementer() {
+	//lock here is experimental, will remove if no future routine acts up on this struct
+	a.mu.Lock()
+	a.currentSessions++
+	a.mu.Unlock()
 }
