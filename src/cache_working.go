@@ -23,13 +23,12 @@ type User struct {
 }
 
 type userSnapShot struct {
-	id string
-
+	id               string
 	currentSessionId string
-
-	isActive bool
-
-	remainingSpace uint64
+	isActive         bool
+	remainingSpace   uint64
+	sessions         activeUserSession
+	currentSessions  uint8
 }
 
 type session struct {
@@ -167,9 +166,14 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 
 	wg.Wait()
 
-	if sessionerr := <-sessionConfigChannel; sessionerr != nil {
-		return nil, sessionerr
+	session := <-sessionConfigChannel
+	if session.error != nil {
+		return nil, session.error
 	}
+
+	session.pool.mu.RLock()
+	newUser.pool.sessionIDs = session.pool.sessionIDs
+	session.pool.mu.RUnlock()
 
 	um.Mu.Lock()
 	um.Users[userId] = newUser
@@ -271,11 +275,18 @@ func AddorUpdateUserCache() {
 
 func (user *User) newUserSnapshot() userSnapShot {
 	user.Mu.RLock()
+	user.pool.mu.RLock()
+	var userSessionsSnapshot = *user.pool.sessions[user.Id]
+	var currentSessions = *&user.pool.currentSessions
+	user.pool.mu.Unlock()
+	user.pool.mu.RUnlock()
 	var userSnapshotCopy userSnapShot = userSnapShot{
 		id:               user.Id,
 		currentSessionId: user.CurrentSessionId,
 		isActive:         user.isActive,
 		remainingSpace:   user.memory.remainingSpace,
+		sessions:         userSessionsSnapshot,
+		currentSessions:  currentSessions,
 	}
 	user.Mu.RUnlock()
 	return userSnapshotCopy

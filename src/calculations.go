@@ -1,10 +1,9 @@
 package src
 
 import (
+	"github.com/streamonkey/size"
 	"sync"
 	"sync/atomic"
-
-	"github.com/streamonkey/size"
 )
 
 type memorylimit struct {
@@ -15,11 +14,11 @@ type memorylimit struct {
 type activeSessionsRegistry struct {
 	mu              sync.RWMutex
 	currentSessions uint8
-	sessions        map[string]*activeUserSession //key here is the user name
+	sessionIDs      map[string][]string //key here is the user name
 }
 
 type activeUserSession struct {
-	mu         sync.RWMutex
+	// mu         sync.RWMutex
 	SessionIDs []string
 }
 
@@ -62,18 +61,18 @@ func sessionPoolConfig(userdto *userDTO, c chan<- sessionPoolConfigDTO, wg *sync
 
 		//experimental may be moved to inside the loop  based on behaviour if needed
 		userdto.pool.mu.RLock()
-		userinpool, userinpoolexist := userdto.pool.sessions[userdto.user.id]
+		userinpool, userinpoolexist := userdto.pool.sessionIDs[userdto.user.id]
 		userdto.pool.mu.RUnlock()
 
 		if !userdto.isNew {
 			if userinpoolexist {
-				if len(userinpool.SessionIDs) < Allowed_Sessions {
-					userinpool.mu.Lock()
-					userinpool.SessionIDs = append(userinpool.SessionIDs, userdto.sessionTokenToAdd)
-					userinpool.mu.Unlock()
+				if len(userinpool) < Allowed_Sessions {
+					userdto.pool.mu.Lock()
+					userinpool = append(userinpool, userdto.sessionTokenToAdd)
+					userdto.pool.mu.Unlock()
 					var activeSessionRegistryObj = &activeSessionsRegistry{}
 					activeSessionRegistryObj.sessionIncrementer()
-					activeSessionRegistryObj.sessions[userdto.user.id] = userinpool
+					activeSessionRegistryObj.sessionIDs[userdto.user.id] = userinpool
 
 					c <- sessionPoolConfigDTO{
 						pool: activeSessionRegistryObj,
@@ -92,11 +91,12 @@ func sessionPoolConfig(userdto *userDTO, c chan<- sessionPoolConfigDTO, wg *sync
 			}
 			return
 		} else if userdto.isNew && !userinpoolexist {
-			var activeSessionRegistryObj = &activeSessionsRegistry{}
-			var activeSessionObj = &activeUserSession{}
-			activeSessionObj.SessionIDs = append(activeSessionObj.SessionIDs, userdto.sessionTokenToAdd)
+			var activeSessionRegistryObj = &activeSessionsRegistry{
+				sessionIDs: make(map[string][]string),
+			}
+
+			activeSessionRegistryObj.sessionIDs[userdto.user.id] = append(activeSessionRegistryObj.sessionIDs[userdto.user.id], userdto.sessionTokenToAdd)
 			activeSessionRegistryObj.sessionIncrementer()
-			activeSessionRegistryObj.sessions[userdto.user.id] = activeSessionObj
 
 			c <- sessionPoolConfigDTO{
 				pool: activeSessionRegistryObj,
@@ -119,7 +119,7 @@ func sessionPoolConfig(userdto *userDTO, c chan<- sessionPoolConfigDTO, wg *sync
 
 func newSessionRegistry() *activeSessionsRegistry {
 	return &activeSessionsRegistry{
-		sessions: make(map[string]*activeUserSession),
+		sessionIDs: make(map[string][]string),
 	}
 }
 
