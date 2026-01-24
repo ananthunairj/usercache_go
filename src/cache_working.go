@@ -27,7 +27,7 @@ type userSnapShot struct {
 	currentSessionId string
 	isActive         bool
 	remainingSpace   uint64
-	sessions         activeUserSession
+	sessions         []string
 	currentSessions  uint8
 }
 
@@ -182,17 +182,23 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 }
 
 func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime time.Duration, refreshTokenExpiryTime time.Duration) (*session, error) {
-
-	user, err := um.isUserAlive(userId)
-	if err != nil {
-		return nil, err
+	um.Mu.Lock()
+	user, error := um.Users[userId]
+	um.Mu.Unlock()
+	if !error {
+		return nil, errUser
 	}
 
 	userCopy := user.newUserSnapshot()
 
+	err := userCopy.isUserAlive(userId)
+	if err != nil {
+		return nil, err
+	}
+
 	var wg *sync.WaitGroup
-	var sessionConfigChannel chan error
-	var sizeCalculatorChannel chan uint64
+	var sessionConfigChannel = make(chan sessionPoolConfigDTO, 1)
+	var sizeCalculatorChannel = make(chan uint64, 1)
 
 	wg.Add(2)
 
@@ -218,8 +224,9 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 	newsession.cache = newCache[string, any]()
 
 	wg.Wait()
-	if sessionerr := <-sessionConfigChannel; sessionerr != nil {
-		return nil, sessionerr
+	session := <-sessionConfigChannel
+	if session.error != nil {
+		return nil, session.error
 	}
 	if userCopy.remainingSpace > <-sizeCalculatorChannel {
 		user.Mu.Lock()
@@ -275,21 +282,19 @@ func AddorUpdateUserCache() {
 
 func (user *User) newUserSnapshot() userSnapShot {
 	user.Mu.RLock()
+	defer user.pool.mu.RUnlock()
 	user.pool.mu.RLock()
-	var userSessionsSnapshot = *user.pool.sessions[user.Id]
-	var currentSessions = *&user.pool.currentSessions
-	user.pool.mu.Unlock()
-	user.pool.mu.RUnlock()
-	var userSnapshotCopy userSnapShot = userSnapShot{
+	defer user.pool.mu.RUnlock()
+
+	return userSnapShot{
 		id:               user.Id,
 		currentSessionId: user.CurrentSessionId,
 		isActive:         user.isActive,
 		remainingSpace:   user.memory.remainingSpace,
-		sessions:         userSessionsSnapshot,
-		currentSessions:  currentSessions,
+		sessions:         user.pool.sessionIDs[user.Id],
+		currentSessions:  user.pool.currentSessions,
 	}
-	user.Mu.RUnlock()
-	return userSnapshotCopy
+
 }
 
 // func (c userPayload) hasAllNeededData(flag bool) bool {
@@ -303,18 +308,10 @@ func (user *User) newUserSnapshot() userSnapShot {
 // 	return false
 // }
 
-func (um *UserManager) isUserAlive(userid string) (*User, error) {
-	um.Mu.RLock()
+func (um *userSnapShot) isUserAlive(userid string) error {
 
-	user, exists := um.Users[userid]
-	um.Mu.RUnlock()
-	if !exists {
-		return nil, errUser
+	if !um.isActive {
+		return errUserInactive
 	}
-	user.Mu.RLock()
-	defer user.Mu.RUnlock()
-	if !user.isActive {
-		return nil, errUserInactive
-	}
-	return user, nil
+	return nil
 }
