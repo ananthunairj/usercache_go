@@ -34,8 +34,25 @@ func calculateInputBytes(value any, c chan<- uint64, wg *sync.WaitGroup) {
 		defer wg.Done()
 	}
 	defer close(c)
-	bytevalue := size.Of(value)
-	c <- uint64(bytevalue)
+	switch v := value.(type) {
+	case []byte:
+		c <- uint64(len(v))
+		return
+	case string:
+		c <- uint64(len(v))
+		return
+	case []string:
+		totalSize := uint64(0)
+		for _, s := range v {
+			totalSize += uint64(len(s))
+		}
+		c <- totalSize
+		return
+	default:
+		c <- uint64(size.Of(value))
+		return
+
+	}
 }
 
 func mbSizeToUINT(value float64) uint64 {
