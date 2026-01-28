@@ -251,11 +251,24 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 
 func (u *User) AddSessionCache(sessionid, key string, value any) (*session, error) {
 
-	usercopy := u.newUserSnapshot()
-	if usercopy.isActive {
+ sessionCopy := u.newSessionSnapshot(sessionid)
+ if sessionCopy.err != nil {
+	return  nil, sessionCopy.err
+ }
+ ischanged,expirederr := sessionCopy.checkTokenExpired()
+  if ischanged {
+	u.Mu.RLock()
+	defer u.Mu.RUnlock()
+	session := u.Sessions[sessionid]
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.sessionToken = sessionCopy.sessionToken
+ }
+ 
+ if expirederr!= nil {
+	return  nil,expirederr  //need to look again whether err should be returned or need to add a strategy to resolve it  
+ }
 
-	}
-	return nil, errUserInactive
 
 }
 
