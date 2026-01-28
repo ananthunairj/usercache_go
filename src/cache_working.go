@@ -43,6 +43,16 @@ type session struct {
 	mu            sync.RWMutex
 }
 
+type sessionSnapshot struct {
+	// sessionId     string
+	sessionToken string
+	refreshToken string
+	// isActive      bool
+	sessionExpiry time.Time
+	refreshExpiry time.Time
+	err           error
+}
+
 type cacheItem[T any] struct {
 	Value        T
 	ExpiryTime   time.Time
@@ -202,7 +212,7 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 
 	wg.Add(2)
 
-	go calculateInputBytes(userCopy, sizeCalculatorChannel, wg)
+	go memoryCalculator(userCopy, sizeCalculatorChannel, wg)
 
 	sessionId, err := newTokenString()
 	if err != nil {
@@ -242,6 +252,10 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 func (u *User) AddSessionCache(sessionid, key string, value any) (*session, error) {
 
 	usercopy := u.newUserSnapshot()
+	if usercopy.isActive {
+
+	}
+	return nil, errUserInactive
 
 }
 
@@ -295,6 +309,31 @@ func (user *User) newUserSnapshot() userSnapShot {
 		currentSessions:  user.pool.currentSessions,
 	}
 
+}
+
+func (user *User) newSessionSnapshot(sessionid string) sessionSnapshot {
+	var sessionSnapCopy sessionSnapshot
+	user.Mu.RLock()
+	defer user.Mu.RUnlock()
+	if user.isActive {
+		session, found := user.Sessions[sessionid]
+		if found {
+			if session.isActive {
+				sessionSnapCopy.sessionToken = session.sessionToken
+				sessionSnapCopy.refreshToken = session.refreshToken
+				sessionSnapCopy.refreshExpiry = session.refreshExpiry
+				sessionSnapCopy.sessionExpiry = session.sessionExpiry
+				return sessionSnapCopy
+			}
+			sessionSnapCopy.err = errSessionInactive
+			return sessionSnapCopy
+		}
+		sessionSnapCopy.err = errSession
+		return sessionSnapCopy
+
+	}
+	sessionSnapCopy.err = errUserInactive
+	return sessionSnapCopy
 }
 
 // func (c userPayload) hasAllNeededData(flag bool) bool {

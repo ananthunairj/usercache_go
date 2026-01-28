@@ -1,9 +1,10 @@
 package src
 
 import (
-	"github.com/streamonkey/size"
+	"reflect"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 )
 
 type memorylimit struct {
@@ -29,29 +30,59 @@ type registrySessionDTO struct {
 
 var osavailableMemory atomic.Uint64
 
-func calculateInputBytes(value any, c chan<- uint64, wg *sync.WaitGroup) {
+
+func memoryCalculator(v any, c chan<- uint64, wg *sync.WaitGroup) {
 	if wg != nil {
 		defer wg.Done()
 	}
 	defer close(c)
-	switch v := value.(type) {
-	case []byte:
-		c <- uint64(len(v))
-		return
-	case string:
-		c <- uint64(len(v))
-		return
-	case []string:
-		totalSize := uint64(0)
-		for _, s := range v {
-			totalSize += uint64(len(s))
-		}
-		c <- totalSize
-		return
-	default:
-		c <- uint64(size.Of(value))
-		return
+	visited := make(map[uintptr]bool)
+	size :=  deepSize(reflect.ValueOf(v), visited)
+	c  <- uint64(size)
+	return 
+}
 
+func deepSize(v reflect.Value, visited map[uintptr]bool) uintptr {
+	if !v.IsValid() {
+		return 0
+	}
+	switch v.Kind() {
+	case reflect.Pointer:
+		ptr := v.Pointer()
+		if ptr == 0 || visited[ptr] {
+			return 0
+		}
+		visited[ptr] = true
+		return unsafe.Sizeof(ptr) + deepSize(v.Elem(), visited)
+
+	case reflect.Struct:
+		size := uintptr(0)
+		for i := 0; i < v.NumField(); i++ {
+			size += deepSize(v.Field(i), visited)
+		}
+		return size
+
+	case reflect.Slice, reflect.Array:
+		size := uintptr(0)
+		for i := 0; i < v.Len(); i++ {
+			size += deepSize(v.Index(i), visited)
+		}
+		return size
+
+	case reflect.Map:
+		size := unsafe.Sizeof(v.Pointer())
+		iter := v.MapRange()
+		for iter.Next() {
+			size += deepSize(iter.Key(), visited)
+			size += deepSize(iter.Value(), visited)
+		}
+		return size
+
+	case reflect.String:
+		return uintptr(len(v.String())) + unsafe.Sizeof("")
+
+	default:
+		return v.Type().Size()
 	}
 }
 

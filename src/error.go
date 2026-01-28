@@ -6,6 +6,7 @@ var (
 	errGuid                   = errors.New("issue occurred during guid creation")
 	errUser                   = errors.New("user not found")
 	errUserInactive           = errors.New(" user is inactive")
+	errSessionInactive        = errors.New("session is inactive")
 	errUserDto                = errors.New("issue in the userDto object passed")
 	errUserMem                = errors.New("memory allocated for user exceeded")
 	errSessionTokenGen        = errors.New("error occured while creating session token")
