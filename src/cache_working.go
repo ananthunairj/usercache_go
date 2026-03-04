@@ -250,25 +250,54 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 }
 
 func (u *User) AddSessionCache(sessionid, key string, value any) (*session, error) {
+	userCopy := u.newUserSnapshot()
+	if userCopy.isActive {
+		var wg (*sync.WaitGroup)
+		var sizeCalculatorChannel = make(chan uint64, 1)
 
- sessionCopy := u.newSessionSnapshot(sessionid)
- if sessionCopy.err != nil {
-	return  nil, sessionCopy.err
- }
- ischanged,expirederr := sessionCopy.checkTokenExpired()
-  if ischanged {
-	u.Mu.RLock()
-	defer u.Mu.RUnlock()
-	session := u.Sessions[sessionid]
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	session.sessionToken = sessionCopy.sessionToken
- }
- 
- if expirederr!= nil {
-	return  nil,expirederr  //need to look again whether err should be returned or need to add a strategy to resolve it  
- }
+		wg.Add(1)
 
+		go memoryCalculator(value,sizeCalculatorChannel,wg)
+
+		sessionCopy := u.newSessionSnapshot(sessionid)
+		if sessionCopy.err != nil {
+			return nil, sessionCopy.err
+		}
+		ischanged, expirederr := sessionCopy.checkTokenExpired()
+
+		//need to look again whether err should be returned or need to add a strategy to resolve it
+		switch expirederr {
+		case errTokenGen:
+			return nil, errTokenGen
+		case errAuth:
+			RetryAuthentication(&sessionCopy)
+			retrySuccess, _ := sessionCopy.checkTokenExpired()
+			if !retrySuccess {
+				return nil, errAuth
+			}
+			ischanged = true
+			fallthrough
+		default:
+			if ischanged {
+				u.Mu.RLock()
+				defer u.Mu.RUnlock()
+				session := u.Sessions[sessionid]
+				session.mu.Lock()
+				defer session.mu.Unlock()
+				session.sessionToken = sessionCopy.sessionToken
+			}
+		}
+		wg.Wait()
+
+		if userCopy.remainingSpace > <-sizeCalculatorChannel {
+			cacheValue := newCache[key,value]()
+		u.Mu.Lock()
+		defer u.Mu.Unlock()
+		u.SharedCache[userCopy.id] = value
+		
+	}
+	}
+	return nil, errUserInactive
 
 }
 
