@@ -1,1 +1,66 @@
 Response Time = Network Latency + Queuing Time + Service Time
+
+
+
+ DB names and Query languages
+
+Neo4j (DB) -> Neo4j is a graph database management system (GDBMS) developed by Neo4j, Inc., founded in 2007 with headquarters in California and Sweden. Designed as a Java-based NoSQL database, it stores and queries interconnected data using nodes and relationships. Considered a widely adopted graph database, Neo4j is available as an open-source
+
+
+Cypher (lang) -> Cypher refers primarily to a graph query language, a cryptographic algorithm, or a method of encoding/decoding information. Cypher query language is a declarative language for property graph databases like Neo4j
+
+Datalog (lang) -> Datalog is a declarative logic programming language. While it is syntactically a subset of Prolog, Datalog generally uses a bottom-up rather than top-down evaluation model. This difference yields significantly different behavior and properties from Prolog. It is often used as a query language for deductive databases.
+
+Datomic (DB) -> is a distributed database and implementation of Datalog. It has ACID transactions, joins, and a logical query language, Datalog.A distinguishing feature of Datomic is that time is a basic feature of data entities.
+
+SPARQL -> (pronounced "sparkle", a recursive acronym for SPARQL Protocol and RDF Query Language) is an RDF query language—that is, a semantic query language for databases—able to retrieve and manipulate data stored in Resource Description Framework (RDF) format
+
+OrientDB -> is an open source NoSQL database management system written in Java. It is a Multi-model database, supporting graph, document and object models
+
+TiDB -> is an open-source, distributed SQL database developed by PingCAP that supports Hybrid Transactional and Analytical Processing (HTAP) workloads.
+TiDB acts as a one-stop solution for both online transactional processing (OLTP) and online analytical processing (OLAP).
+
+Titan : TiDB Storage Engine (Key-Value/Relational) -> is a high-performance RocksDB plugin designed for key-value separation, particularly used within the TiDB distributed SQL database.
+It is designed to reduce write amplification in RocksDB when dealing with large values (wide tables or JSON data).
+
+Berkeley DB (BDB) -> is an embedded database software library for key/value data, historically significant in open-source software. Berkeley DB is written in C with API bindings for many other programming languages. BDB stores arbitrary key/data pairs as byte arrays and supports
+ multiple data items for a single key. Berkeley DB is not a relational database,[2] although it has database features including database transactions, multiversion concurrency control and write-ahead logging.
+
+IBM Information Management System (IMS) -> is a joint hierarchical database and information management system that acts as a high-throughput, transactional database manager. While originally relying on navigational data manipulation languages, modern IMS supports SQL to interface with its hierarchical database structure 
+
+Apache HBase -> is an open-source, distributed, versioned, column-oriented NoSQL database modeled after Google's Bigtable, designed to run on top of the Hadoop Distributed File System (HDFS). It provides real-time, random read/write access to petabytes of data, making it ideal for sparse, large-scale, and time-series datasets. 
+
+CODASYL (Conference on Data Systems Languages) -> was a 1959-founded, volunteer-driven consortium of industry and government experts focused on developing standardized, efficient, and machine-independent data systems. They are best known for defining the COBOL programming language and developing the network database model
+Developed Data Description Languages (DDL) and Data Manipulation Languages (DML).
+
+RethinkDb -> The database stores JSON documents with dynamic schemas, and is designed to facilitate pushing real-time updates for query results to applications.
+Instead of applications constantly asking the database for updates (polling), RethinkDB can be instructed to push updated query results to the application as they occur, which is ideal for live apps, streaming analytics, and collaborative tools
+uses ReQL query language.
+well-suited for a variety of applications requiring live data updates, such as: 
+     -->   Reactive web and mobile apps (e.g., Google Docs-style collaboration).
+     -->   Multiplayer games.
+     -->   Real-time marketplaces and trading engines.
+     -->   Streaming analytics and live dashboards.
+     -->   Connected devices and IoT infrastructure. 
+
+IBM Db2 -> is a family of secure, AI-powered relational database management systems (RDBMS) designed by IBM for high-performance transactional (OLTP) and analytics workloads. It supports structured, JSON, and XML data, offering cloud-native, on-premises, and hybrid deployment options 
+for managing large-scale, mission-critical enterprise data
+Features built-in AI query optimization that automatically tunes performance, improving speed for complex, real-time analytics
+
+XPath -> is an expression language designed to support the query or transformation of XML documents
+
+Apache CouchDB -> is an open-source document-oriented NoSQL database, implemented in Erlang. CouchDB uses multiple formats and protocols to store, transfer, and process its data. It uses JSON to store data, JavaScript as its query language using MapReduce, and HTTP for an API.
+
+Erlang ->  is a functional, concurrent, and fault-tolerant programming language and runtime environment (BEAM) designed for building massively scalable, soft real-time, high-availability systems.
+
+HyperDex -> It acts as a database that stores objects with keys and secondary attributes, allowing for fast, flexible lookups.
+It relies on techniques like hyperspace hashing and value-dependent chaining to manage data distribution and consistency.
+
+Aerospike -> is a high-performance, distributed NoSQL database designed for real-time, mission-critical applications requiring sub-millisecond latency at petabyte scale. Utilizing a unique Hybrid Memory Architecture (storing indices in RAM and data on NVMe/SSD), 
+it delivers high throughput for fraud detection, ad-tech, and AI, often reducing infrastructure costs by 80%
+
+
+
+
+
+
