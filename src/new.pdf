@@ -60,6 +60,11 @@ Aerospike -> is a high-performance, distributed NoSQL database designed for real
 it delivers high throughput for fraud detection, ad-tech, and AI, often reducing infrastructure costs by 80%
 
 
+SSTable -> Sorted String tables
+
+
+
+
 
 
 

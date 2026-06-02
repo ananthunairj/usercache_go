@@ -70,6 +70,12 @@ func newCache[K comparable, V any]() *Cache[K, V] {
 	}
 }
 
+func newCacheValue[K comparable, V any](userid string, value any) *Cache[K, V] {
+	return &Cache[K, V]{
+		Store: make(map[K]cacheItem[V]),
+	}
+}
+
 // type userPayload struct {
 // 	id    string
 // 	key   string
@@ -91,6 +97,7 @@ type sessionPoolConfigDTO struct {
 func NewUserManager() *UserManager {
 	um := &UserManager{
 		Users: make(map[string]*User),
+		Mu: &sync.RWMutex{},
 	}
 	// um.userCacheCleanup(4 * time.Hour)
 	return um
@@ -103,7 +110,7 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 	}
 
 	var userSnapShot userSnapShot
-	var wg *sync.WaitGroup
+	wg := &sync.WaitGroup{}
 	var osmemorychannel = make(chan error, 1)
 
 	wg.Add(1)
@@ -128,9 +135,6 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 	gensessrefErr := (sessionuser).generateSessionRefreshToken(sessionTokenExpiryTime, refreshTokenExpiryTime)
 	if gensessrefErr != nil {
 		return nil, gensessrefErr
-	}
-	if err != nil {
-		return nil, errTokenGen
 	}
 
 	sessionuser.lastAccessed = time.Now()
@@ -167,10 +171,12 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 
 	newUser := &User{
 		Id:               userId,
+		Mu:               sync.RWMutex{},
 		Sessions:         map[string]*session{tokens[0]: sessionuser},
 		CurrentSessionId: tokens[0],
 		SharedCache:      newCache[string, any](),
 		memory:           usermemory,
+		pool:             newSessionRegistry(),
 		isActive:         true,
 	}
 
@@ -180,10 +186,11 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 	if session.error != nil {
 		return nil, session.error
 	}
-
+	newUser.Mu.Lock()
 	session.pool.mu.RLock()
 	newUser.pool.sessionIDs = session.pool.sessionIDs
 	session.pool.mu.RUnlock()
+	newUser.Mu.Unlock()
 
 	um.Mu.Lock()
 	um.Users[userId] = newUser
@@ -206,7 +213,7 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 		return nil, err
 	}
 
-	var wg *sync.WaitGroup
+	 wg := &sync.WaitGroup{}
 	var sessionConfigChannel = make(chan sessionPoolConfigDTO, 1)
 	var sizeCalculatorChannel = make(chan uint64, 1)
 
@@ -227,7 +234,7 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 
 	go sessionPoolConfig(userdto, sessionConfigChannel, wg)
 
-	var newsession *session
+	 newsession := &session{}
 	newsession.sessionId = sessionId
 	(newsession).generateSessionRefreshToken(sessionTokenExpiryTime, refreshTokenExpiryTime)
 	newsession.lastAccessed = time.Now()
@@ -257,13 +264,13 @@ func (u *User) AddSessionCache(sessionid, key string, value any) (*session, erro
 
 		wg.Add(1)
 
-		go memoryCalculator(value,sizeCalculatorChannel,wg)
+		go memoryCalculator(value, sizeCalculatorChannel, wg)
 
 		sessionCopy := u.newSessionSnapshot(sessionid)
 		if sessionCopy.err != nil {
 			return nil, sessionCopy.err
 		}
-		ischanged, expirederr := sessionCopy.checkTokenExpired()
+		expired, expirederr := sessionCopy.checkTokenExpired()
 
 		//need to look again whether err should be returned or need to add a strategy to resolve it
 		switch expirederr {
@@ -271,66 +278,80 @@ func (u *User) AddSessionCache(sessionid, key string, value any) (*session, erro
 			return nil, errTokenGen
 		case errAuth:
 			RetryAuthentication(&sessionCopy)
-			retrySuccess, _ := sessionCopy.checkTokenExpired()
-			if !retrySuccess {
+			expired, _ := sessionCopy.checkTokenExpired()
+			if expired {
 				return nil, errAuth
 			}
-			ischanged = true
+			expired = false
 			fallthrough
 		default:
-			if ischanged {
+			if !expired {
 				u.Mu.RLock()
 				defer u.Mu.RUnlock()
 				session := u.Sessions[sessionid]
 				session.mu.Lock()
 				defer session.mu.Unlock()
 				session.sessionToken = sessionCopy.sessionToken
+
+				if userCopy.remainingSpace > <-sizeCalculatorChannel {
+					// u.Mu.Lock()
+					// defer u.Mu.Unlock()
+					// u.SharedCache.Store[userCopy.id] = cacheItem[any]{
+					// 	Value:        value,
+					// 	LastAccessed: time.Now(),
+					// }
+					session.mu.Lock()
+					session.cache.Mu.Lock()
+					session.cache.Store[userCopy.id] = cacheItem[any]{
+						Value:        value,
+						LastAccessed: time.Now(),
+					}
+					session.cache.Mu.Unlock()
+					session.mu.Unlock()
+
+					return session, nil
+
+				}
+				return session, errCacheLimit
 			}
 		}
 		wg.Wait()
 
-		if userCopy.remainingSpace > <-sizeCalculatorChannel {
-			cacheValue := newCache[key,value]()
-		u.Mu.Lock()
-		defer u.Mu.Unlock()
-		u.SharedCache[userCopy.id] = value
-		
-	}
 	}
 	return nil, errUserInactive
 
 }
 
-func (u *User) UpdateSessionCache() (*session, error) {
+// func (u *User) UpdateSessionCache() (*session, error) {
 
-}
+// }
 
-func (u *User) AddorUpdateSessionCache(sessionid, sessionToken, key string, value any) (*session, error) {
+// func (u *User) AddorUpdateSessionCache(sessionid, sessionToken, key string, value any) (*session, error) {
 
-	usercopy := u.newUserSnapshot()
-	u.Mu.RLock()
-	session, exists := u.Sessions[sessionid]
-	u.Mu.RUnlock()
-	if !exists {
-		return nil, errSession
-	}
-	err := (session).checkTokenExpired()
-	if err == errAuth {
-		RetryAuthentication(session)
-	}
-	if sessionToken != session.sessionToken {
-		return nil, errSessionToken
-	}
+// 	usercopy := u.newUserSnapshot()
+// 	u.Mu.RLock()
+// 	session, exists := u.Sessions[sessionid]
+// 	u.Mu.RUnlock()
+// 	if !exists {
+// 		return nil, errSession
+// 	}
+// 	err := (session).checkTokenExpired()
+// 	if err == errAuth {
+// 		RetryAuthentication(session)
+// 	}
+// 	if sessionToken != session.sessionToken {
+// 		return nil, errSessionToken
+// 	}
 
-	updatedsession := s.checkTokenExpired(sessionToken)
-	switch {
-	case updatedsession == nil:
-		return updatedsession, errAddorUpdateCache
-	case updatedsession.Err != nil:
-		return updatedsession, updatedsession.Err
-	}
+// 	updatedsession := s.checkTokenExpired(sessionToken)
+// 	switch {
+// 	case updatedsession == nil:
+// 		return updatedsession, errAddorUpdateCache
+// 	case updatedsession.Err != nil:
+// 		return updatedsession, updatedsession.Err
+// 	}
 
-}
+// }
 
 func AddorUpdateUserCache() {
 
@@ -338,7 +359,7 @@ func AddorUpdateUserCache() {
 
 func (user *User) newUserSnapshot() userSnapShot {
 	user.Mu.RLock()
-	defer user.pool.mu.RUnlock()
+	defer user.Mu.RUnlock()
 	user.pool.mu.RLock()
 	defer user.pool.mu.RUnlock()
 

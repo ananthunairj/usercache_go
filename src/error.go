@@ -36,4 +36,5 @@ var (
 	errMemExceeded            = errors.New("requested memory not available  in the disk")
 	errUserInRegistryNotFound = errors.New("user happened to be missing in the registry")
 	errSessionLimit           = errors.New("allowed session limit for the user exceeded")
+	errCacheLimit             = errors.New("cache limit exceeded")
 )

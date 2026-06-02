@@ -76,15 +76,19 @@ func (s *sessionSnapshot) checkTokenExpired() (bool, error) {
 
 func (u *User) verifySessionCredentials(sessionid string, sessiontoken string) error {
 
-	u.Mu.RLock()
-	session, exist := u.Sessions[sessionid]
-	if exist {
+	
+	sessionCopy := u.newSessionSnapshot(sessionid)
+	if sessionCopy.err != nil {
+		return sessionCopy.err
+	}
+	
+	if sessionCopy.sessionToken != "" {
 		// if u.CurrentSessionId == sessionid {
 
 		// }
-		err := session.checkTokenExpired()
-		if err != nil {
-
+		expired,err := sessionCopy.checkTokenExpired()
+		if expired {
+              return err
 		}
 		return err
 	}

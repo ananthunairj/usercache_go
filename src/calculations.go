@@ -161,8 +161,6 @@ func sessionPoolConfig(userdto *userDTO, c chan<- sessionPoolConfigDTO, wg *sync
 		pool:  nil,
 		error: errUser,
 	}
-	return
-
 }
 
 func newSessionRegistry() *activeSessionsRegistry {

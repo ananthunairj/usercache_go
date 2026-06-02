@@ -28,19 +28,18 @@ var (
 )
 
 func operatingSystemAvailableMemory(c chan<- error, wg *sync.WaitGroup)  {
-	if wg != nil {
-		defer wg.Done()
-	}
-	defer close(c)
+	defer wg.Done()
 	memoryStatus.dwLength = uint32(unsafe.Sizeof(memoryStatus))
-	ret, _, _ := globalMemorystatusEx.Call(uintptr(unsafe.Pointer(&memoryStatus)))
+	ret, _, callErr := globalMemorystatusEx.Call(uintptr(unsafe.Pointer(&memoryStatus)))
 	if ret == 0 {
 		_ = osavailableMemory.Swap(0)
+		if callErr != nil && callErr != syscall.Errno(0) {
+            c <- callErr
+            return
+        }
 		c <- errGlobalMemoryStatusEx
 		return 
 	}
 	_ = osavailableMemory.Swap(memoryStatus.ullAvailPhys)
 	c <- nil
-	return 
-
 }
