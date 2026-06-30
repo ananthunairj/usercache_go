@@ -181,6 +181,7 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 	}
 
 	wg.Wait()
+	
 
 	session := <-sessionConfigChannel
 	if session.error != nil {

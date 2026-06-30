@@ -15,7 +15,7 @@ func operatingSystemAvailableMemory(c chan<- error, wg *sync.WaitGroup) {
 	if wg != nil {
 		defer wg.Done()
 	}
-	close(c)
+	defer close(c)
 	file, err := os.Open("/proc/meminfo")
 	if err != nil {
 		_ = osavailableMemory.Swap(0)
@@ -50,5 +50,5 @@ func operatingSystemAvailableMemory(c chan<- error, wg *sync.WaitGroup) {
 	}
 	_ = osavailableMemory.Swap(0)
 	c <- errKeyNotFoundInProcMem
-	return
+
 }
