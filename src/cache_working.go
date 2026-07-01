@@ -86,7 +86,7 @@ type userDTO struct {
 	user              userSnapShot
 	isNew             bool
 	sessionTokenToAdd string
-	pool              activeSessionsRegistry
+	pool              *activeSessionsRegistry
 }
 
 type sessionPoolConfigDTO struct {
@@ -97,7 +97,7 @@ type sessionPoolConfigDTO struct {
 func NewUserManager() *UserManager {
 	um := &UserManager{
 		Users: make(map[string]*User),
-		Mu: &sync.RWMutex{},
+		Mu:    &sync.RWMutex{},
 	}
 	// um.userCacheCleanup(4 * time.Hour)
 	return um
@@ -158,7 +158,7 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 		user:              userSnapShot,
 		isNew:             true,
 		sessionTokenToAdd: tokens[0],
-		pool:              *newSessionRegistry(),
+		pool:              newSessionRegistry(),
 	}
 
 	wg.Add(1)
@@ -181,7 +181,6 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 	}
 
 	wg.Wait()
-	
 
 	session := <-sessionConfigChannel
 	if session.error != nil {
@@ -190,6 +189,7 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 	newUser.Mu.Lock()
 	session.pool.mu.RLock()
 	newUser.pool.sessionIDs = session.pool.sessionIDs
+	newUser.pool.currentSessions = 1
 	session.pool.mu.RUnlock()
 	newUser.Mu.Unlock()
 
@@ -214,7 +214,16 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 		return nil, err
 	}
 
-	 wg := &sync.WaitGroup{}
+	user.Mu.RLock()
+	user.pool.mu.RLock()
+	pool := &activeSessionsRegistry{
+		currentSessions: user.pool.currentSessions,
+		sessionIDs:      user.pool.sessionIDs,
+	}
+	user.pool.mu.RUnlock()
+	user.Mu.RUnlock()
+
+	wg := &sync.WaitGroup{}
 	var sessionConfigChannel = make(chan sessionPoolConfigDTO, 1)
 	var sizeCalculatorChannel = make(chan uint64, 1)
 
@@ -231,11 +240,12 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 		user:              userCopy,
 		isNew:             false,
 		sessionTokenToAdd: sessionId,
+		pool:              pool,
 	}
 
 	go sessionPoolConfig(userdto, sessionConfigChannel, wg)
 
-	 newsession := &session{}
+	newsession := &session{}
 	newsession.sessionId = sessionId
 	(newsession).generateSessionRefreshToken(sessionTokenExpiryTime, refreshTokenExpiryTime)
 	newsession.lastAccessed = time.Now()

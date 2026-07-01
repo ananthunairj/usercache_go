@@ -30,16 +30,15 @@ type registrySessionDTO struct {
 
 var osavailableMemory atomic.Uint64
 
-
 func memoryCalculator(v any, c chan<- uint64, wg *sync.WaitGroup) {
 	if wg != nil {
 		defer wg.Done()
 	}
 	defer close(c)
 	visited := make(map[uintptr]bool)
-	size :=  deepSize(reflect.ValueOf(v), visited)
-	c  <- uint64(size)
-	return 
+	size := deepSize(reflect.ValueOf(v), visited)
+	c <- uint64(size)
+	return
 }
 
 func deepSize(v reflect.Value, visited map[uintptr]bool) uintptr {
@@ -118,7 +117,9 @@ func sessionPoolConfig(userdto *userDTO, c chan<- sessionPoolConfigDTO, wg *sync
 					userdto.pool.mu.Lock()
 					userinpool = append(userinpool, userdto.sessionTokenToAdd)
 					userdto.pool.mu.Unlock()
-					var activeSessionRegistryObj = &activeSessionsRegistry{}
+					var activeSessionRegistryObj = &activeSessionsRegistry{
+						sessionIDs: make(map[string][]string),
+					}
 					activeSessionRegistryObj.sessionIncrementer()
 					activeSessionRegistryObj.sessionIDs[userdto.user.id] = userinpool
 
@@ -166,6 +167,7 @@ func sessionPoolConfig(userdto *userDTO, c chan<- sessionPoolConfigDTO, wg *sync
 func newSessionRegistry() *activeSessionsRegistry {
 	return &activeSessionsRegistry{
 		sessionIDs: make(map[string][]string),
+		mu:         sync.RWMutex{},
 	}
 }
 
