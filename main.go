@@ -20,21 +20,26 @@ func main() {
 	anandhu, err := um.AddNewUser(30*time.Minute, 2*time.Minute, 30)
 	if err != nil {
 
-		fmt.Print(err.Error())
+		//fmt.Print(err.Error())
+		return
 	}
-	fmt.Printf("%+v\n", anandhu)
+	// fmt.Printf("%+v\n", anandhu)
 
-	ak, err := um.AddNewSessionToUser(anandhu.Id, 40*time.Minute, 2*time.Minute)
+	anandhu, err = um.AddNewSessionToUser(anandhu.Id, 40*time.Minute, 2*time.Minute)
 	
 	if err != nil {
-		fmt.Print(err.Error())
+		//fmt.Print(err.Error())
+		return
 	}
-	fmt.Printf("%+v/n", ak)
+	//fmt.Printf("%+v/n", ak)
 
-	ak,err = anandhu.AddSessionCache(ak.SessionId,"fruits","apple,guava")
+	_,err = anandhu.AddSessionCache("fruits","apple,guava",2*time.Minute)
 	if err != nil {
-		fmt.Print(err.Error())
+		return
 	}
-	fmt.Printf("%+v/n", ak)
+	value,_ := anandhu.FetchCacheData("fruits")
+		fmt.Print(value)
+
+	
 
 }

@@ -77,7 +77,7 @@ func (s *sessionSnapshot) checkTokenExpired() (bool, error) {
 func (u *User) verifySessionCredentials(sessionid string, sessiontoken string) error {
 
 	
-	sessionCopy := u.newSessionSnapshot(sessionid)
+	sessionCopy := u.newSessionSnapshot()
 	if sessionCopy.err != nil {
 		return sessionCopy.err
 	}

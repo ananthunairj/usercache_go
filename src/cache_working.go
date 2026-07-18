@@ -44,7 +44,7 @@ type Session struct {
 }
 
 type sessionSnapshot struct {
-	// sessionId     string
+	sessionId    string
 	sessionToken string
 	refreshToken string
 	// isActive      bool
@@ -60,7 +60,7 @@ type cacheItem[T any] struct {
 }
 
 type Cache[K comparable, V any] struct {
-	Mu    sync.Mutex
+	Mu    sync.RWMutex
 	Store map[K]cacheItem[V]
 }
 
@@ -199,7 +199,7 @@ func (um *UserManager) AddNewUser(sessionTokenExpiryTime time.Duration, refreshT
 	return newUser, nil
 }
 
-func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime time.Duration, refreshTokenExpiryTime time.Duration) (*Session, error) {
+func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime time.Duration, refreshTokenExpiryTime time.Duration) (*User, error) {
 	um.Mu.Lock()
 	user, error := um.Users[userId]
 	um.Mu.Unlock()
@@ -250,6 +250,7 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 	}
 	(newsession).generateSessionRefreshToken(sessionTokenExpiryTime, refreshTokenExpiryTime)
 	newsession.lastAccessed = time.Now()
+	newsession.isActive = true
 	newsession.cache = newCache[string, any]()
 
 	wg.Wait()
@@ -262,13 +263,13 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 		user.Sessions[sessionIdUser] = newsession
 		user.CurrentSessionId = sessionIdUser
 		user.Mu.Unlock()
-		return newsession, nil
+		return user, nil
 	}
 	return nil, errUserMem
 
 }
 
-func (u *User) AddSessionCache(sessionid, key string, value any) (*Session, error) {
+func (u *User) AddSessionCache(key string, value any,ttl time.Duration) (*Session, error) {
 	userCopy := u.newUserSnapshot()
 	if userCopy.isActive {
 		wg := &sync.WaitGroup{}
@@ -278,7 +279,7 @@ func (u *User) AddSessionCache(sessionid, key string, value any) (*Session, erro
 
 		go memoryCalculator(value, sizeCalculatorChannel, wg)
 
-		sessionCopy := u.newSessionSnapshot(sessionid)
+		sessionCopy := u.newSessionSnapshot()
 		if sessionCopy.err != nil {
 			return nil, sessionCopy.err
 		}
@@ -300,7 +301,7 @@ func (u *User) AddSessionCache(sessionid, key string, value any) (*Session, erro
 			if !expired {
 				u.Mu.RLock()
 				defer u.Mu.RUnlock()
-				session := u.Sessions[sessionid]
+				session := u.Sessions[userCopy.currentSessionId]
 				session.mu.Lock()
 				defer session.mu.Unlock()
 				session.sessionToken = sessionCopy.sessionToken
@@ -316,6 +317,7 @@ func (u *User) AddSessionCache(sessionid, key string, value any) (*Session, erro
 					session.cache.Mu.Lock()
 					session.cache.Store[key] = cacheItem[any]{
 						Value:        value,
+						ExpiryTime: time.Now().Add(ttl),
 						LastAccessed: time.Now(),
 					}
 					session.cache.Mu.Unlock()
@@ -364,6 +366,30 @@ func AddorUpdateUserCache() {
 
 }
 
+func (user *User) FetchCacheData(key string) (any, error) {
+	user.Mu.RLock()
+	defer user.Mu.RUnlock()
+	alive := user.isActive
+	if alive {
+		session,found := user.Sessions[user.CurrentSessionId]
+		if found {
+           if session.isActive{
+               cache := session.cache
+			   cache.Mu.RLock()
+			     store := cache.Store[key]
+				cache.Mu.RUnlock()
+			   if store.Value != nil {
+                   return  store.Value, nil
+			   }
+			   return  nil,errCacheData
+		   }
+		   return  nil,errSessionInactive
+		}
+		return nil, errSession
+	}
+	return nil, errUserInactive
+}
+
 func (user *User) newUserSnapshot() userSnapShot {
 	user.Mu.RLock()
 	defer user.Mu.RUnlock()
@@ -381,14 +407,15 @@ func (user *User) newUserSnapshot() userSnapShot {
 
 }
 
-func (user *User) newSessionSnapshot(sessionid string) sessionSnapshot {
+func (user *User) newSessionSnapshot() sessionSnapshot {
 	var sessionSnapCopy sessionSnapshot
 	user.Mu.RLock()
 	defer user.Mu.RUnlock()
 	if user.isActive {
-		session, found := user.Sessions[sessionid]
+		session, found := user.Sessions[user.CurrentSessionId]
 		if found {
 			if session.isActive {
+				sessionSnapCopy.sessionId = session.SessionId
 				sessionSnapCopy.sessionToken = session.sessionToken
 				sessionSnapCopy.refreshToken = session.refreshToken
 				sessionSnapCopy.refreshExpiry = session.refreshExpiry
