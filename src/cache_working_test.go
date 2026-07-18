@@ -157,7 +157,7 @@ func TestUserManager_AddNewUser_SessionConfiguration(t *testing.T) {
         t.Error("Expected lastAccessed to be set")
     }
     
-    if session.sessionId != user.CurrentSessionId {
+    if session.SessionId != user.CurrentSessionId {
         t.Error("Expected session ID to match current session ID")
     }
 }

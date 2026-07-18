@@ -17,14 +17,21 @@ type Person struct {
 func main() {
 
 	um := src.NewUserManager()
-	anandhu, err := um.AddNewUser(30*time.Second, 2*time.Minute, 30)
+	anandhu, err := um.AddNewUser(30*time.Minute, 2*time.Minute, 30)
 	if err != nil {
 
 		fmt.Print(err.Error())
 	}
 	fmt.Printf("%+v\n", anandhu)
 
-	ak, err := um.AddNewSessionToUser(anandhu.Id, 40*time.Second, 2*time.Minute)
+	ak, err := um.AddNewSessionToUser(anandhu.Id, 40*time.Minute, 2*time.Minute)
+	
+	if err != nil {
+		fmt.Print(err.Error())
+	}
+	fmt.Printf("%+v/n", ak)
+
+	ak,err = anandhu.AddSessionCache(ak.SessionId,"fruits","apple,guava")
 	if err != nil {
 		fmt.Print(err.Error())
 	}

@@ -9,7 +9,7 @@ const (
 	DefaultRefreshTokenExpiry = DefaultRefreshTokenTime * time.Hour
 )
 
-func (session *session) generateSessionRefreshToken(sessionTokenExpiryTime time.Duration, refreshTokenExpiryTime time.Duration) error {
+func (session *Session) generateSessionRefreshToken(sessionTokenExpiryTime time.Duration, refreshTokenExpiryTime time.Duration) error {
 	sessionToken, sessiontokenerr := generateToken(session_token_length)
 	if sessiontokenerr != nil {
 		return errSessionTokenGen

@@ -27,11 +27,12 @@ func (trie *RuneTrie) Get(key string) any {
 	node := trie
 	for _, r := range key {
 		node.mu.RLock()
-		node = node.children[r]
-		if node == nil {
+		next := node.children[r]
+		node.mu.RUnlock()
+		if next == nil {
 			return nil
 		}
-		node.mu.RUnlock()
+		node = next
 	}
 	return node.value
 }
