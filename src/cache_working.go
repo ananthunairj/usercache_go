@@ -269,7 +269,7 @@ func (um *UserManager) AddNewSessionToUser(userId string, sessionTokenExpiryTime
 
 }
 
-func (u *User) AddSessionCache(key string, value any,ttl time.Duration) (*Session, error) {
+func (u *User) AddSessionCache(key string, value any, ttl time.Duration) (*Session, error) {
 	userCopy := u.newUserSnapshot()
 	if userCopy.isActive {
 		wg := &sync.WaitGroup{}
@@ -317,7 +317,7 @@ func (u *User) AddSessionCache(key string, value any,ttl time.Duration) (*Sessio
 					session.cache.Mu.Lock()
 					session.cache.Store[key] = cacheItem[any]{
 						Value:        value,
-						ExpiryTime: time.Now().Add(ttl),
+						ExpiryTime:   time.Now().Add(ttl),
 						LastAccessed: time.Now(),
 					}
 					session.cache.Mu.Unlock()
@@ -371,19 +371,29 @@ func (user *User) FetchCacheData(key string) (any, error) {
 	defer user.Mu.RUnlock()
 	alive := user.isActive
 	if alive {
-		session,found := user.Sessions[user.CurrentSessionId]
+		session, found := user.Sessions[user.CurrentSessionId]
 		if found {
-           if session.isActive{
-               cache := session.cache
-			   cache.Mu.RLock()
-			     store := cache.Store[key]
-				cache.Mu.RUnlock()
-			   if store.Value != nil {
-                   return  store.Value, nil
-			   }
-			   return  nil,errCacheData
-		   }
-		   return  nil,errSessionInactive
+			if session.isActive {
+
+				cache := session.cache
+				cache.Mu.RLock()
+				store, found := cache.Store[key]
+				if found {
+					cache.Mu.RUnlock()
+					if !time.Now().After(store.ExpiryTime) {
+						if store.Value != nil {
+							return store.Value, nil
+						}
+						return nil, errCacheData
+					} else {
+						cache.deleteCache(key)
+						return nil, errCacheExpired
+					}
+				}
+				return nil, errReadCacheKey
+
+			}
+			return nil, errSessionInactive
 		}
 		return nil, errSession
 	}
@@ -450,4 +460,10 @@ func (um *userSnapShot) isUserAlive(userid string) error {
 		return errUserInactive
 	}
 	return nil
+}
+
+func (c *Cache[K, V]) deleteCache(key K) {
+	c.Mu.Lock()
+	defer c.Mu.Unlock()
+	delete(c.Store, key)
 }

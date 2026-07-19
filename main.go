@@ -17,7 +17,7 @@ type Person struct {
 func main() {
 
 	um := src.NewUserManager()
-	anandhu, err := um.AddNewUser(30*time.Minute, 2*time.Minute, 30)
+	anandhu, err := um.AddNewUser(15*time.Second, 2*time.Second, 30)
 	if err != nil {
 
 		//fmt.Print(err.Error())
@@ -25,21 +25,34 @@ func main() {
 	}
 	// fmt.Printf("%+v\n", anandhu)
 
-	anandhu, err = um.AddNewSessionToUser(anandhu.Id, 40*time.Minute, 2*time.Minute)
 	
-	if err != nil {
-		//fmt.Print(err.Error())
-		return
-	}
 	//fmt.Printf("%+v/n", ak)
 
-	_,err = anandhu.AddSessionCache("fruits","apple,guava",2*time.Minute)
+	_,err = anandhu.AddSessionCache("fruits","apple,guava",10*time.Second)
 	if err != nil {
 		return
 	}
 	value,_ := anandhu.FetchCacheData("fruits")
 		fmt.Print(value)
 
+	myTimer := time.NewTimer(14 * time.Second)
+
+	fmt.Println("Timer started...")
+
+	// This blocks until the timer's channel 'C' receives a value
+	<-myTimer.C
+	
+	
+	// value,_ = anandhu.FetchCacheData("fruits")
+	// 	fmt.Print(value)
+
+	_,err = anandhu.AddSessionCache("fruit","applet,banana",10*time.Second)
+	if err != nil {
+		fmt.Print(err.Error())
+	}
+    
+	value,_ = anandhu.FetchCacheData("fruit")
+		fmt.Print(value)
 	
 
 }
